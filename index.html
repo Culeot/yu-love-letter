@@ -301,10 +301,10 @@ body{
 .lock-input-wrap{
   position:relative;
   display:flex;align-items:center;justify-content:center;
-  gap:10px;
+  gap:clamp(8px,2.4vw,14px);
 }
 .lock-digit{
-  width:clamp(34px,9vw,46px);height:clamp(48px,12vw,60px);
+  width:clamp(38px,11vw,52px);height:clamp(52px,13vw,64px);
   background:transparent;
   border:none;border-bottom:2px solid var(--line);
   color:var(--gold);
@@ -312,13 +312,28 @@ body{
   font-size:clamp(1.4rem,4vw,1.9rem);
   text-align:center;
   outline:none;
-  transition:border-color .3s;
-  caret-color:var(--gold);
+  transition:border-color .3s, background .3s;
+  caret-color:transparent; /* 单格无光标,圆点固定居中 */
 }
-.lock-digit:focus{border-color:var(--gold);}
+.lock-digit:focus{border-color:var(--gold);background:rgba(201,169,110,.06);}
 .lock-digit::-webkit-outer-spin-button,
 .lock-digit::-webkit-inner-spin-button{-webkit-appearance:none;}
 .lock-digit[type=number]{-moz-appearance:textfield;appearance:textfield;}
+.lock-submit{
+  margin-top:2.4rem;
+  padding:13px 46px;
+  background:transparent;
+  border:1px solid var(--line);
+  border-radius:40px;
+  color:var(--gold);
+  font-family:var(--font-en);
+  font-size:.8rem;letter-spacing:.4em;text-indent:.4em;
+  cursor:pointer;
+  transition:all .3s ease;
+  min-height:44px; /* 触控目标 ≥44px */
+}
+.lock-submit:hover,.lock-submit:active{background:var(--wine);border-color:var(--wine-2);color:var(--ink);}
+.lock-submit:disabled{opacity:.3;cursor:default;background:transparent;border-color:var(--line-faint);color:var(--ink-faint);}
 .lock-err{
   margin-top:1.6rem;
   font-family:var(--font-hand);
@@ -352,8 +367,14 @@ body{
   <div class="lock-box" id="lockBox">
     <div class="lock-title">请输入密码</div>
     <div class="lock-input-wrap" id="lockWrap">
-      <input class="lock-digit" type="password" inputmode="numeric" maxlength="6" autocomplete="off" aria-label="密码" id="lockInput" autofocus>
+      <input class="lock-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="密码第1位" data-digit="0">
+      <input class="lock-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="密码第2位" data-digit="1">
+      <input class="lock-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="密码第3位" data-digit="2">
+      <input class="lock-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="密码第4位" data-digit="3">
+      <input class="lock-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="密码第5位" data-digit="4">
+      <input class="lock-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="密码第6位" data-digit="5">
     </div>
+    <button class="lock-submit" id="lockSubmit" type="button" disabled>确 认</button>
     <div class="lock-err" id="lockErr">密码错误</div>
     <div class="lock-hint">— 只给一个人看的信 —</div>
   </div>
@@ -639,47 +660,85 @@ function runTypewriter(idx){
 }
 
 /* ============================================================
-   密码门(锁定层)——密码 140522
+   密码门(锁定层)——密码 140522,6 位格子输入
    ============================================================ */
 const LOCK_PASS = '140522';
 const lockScreen = document.getElementById('lockScreen');
 const lockBox = document.getElementById('lockBox');
-const lockInput = document.getElementById('lockInput');
 const lockErr = document.getElementById('lockErr');
+const lockSubmit = document.getElementById('lockSubmit');
+const lockDigits = Array.from(document.querySelectorAll('.lock-digit'));
+
+function getPass(){ return lockDigits.map(d => d.value).join(''); }
+function focusDigit(i){
+  if(i >= 0 && i < lockDigits.length) lockDigits[i].focus();
+}
+function syncSubmitState(){
+  lockSubmit.disabled = getPass().length !== 6;
+}
+function clearDigits(){
+  lockDigits.forEach(d => { d.value = ''; });
+  syncSubmitState();
+  focusDigit(0);
+}
+
+// 输入:每格 1 位,自动跳下一格;满 6 位聚焦确认键(手机端可按确认)
+lockDigits.forEach((input, i) => {
+  input.addEventListener('input', () => {
+    if(input.value.length > 1) input.value = input.value.slice(-1); // 只留最后输入字符
+    if(input.value && i < lockDigits.length - 1){
+      focusDigit(i + 1);
+    }else{
+      input.blur();
+      lockSubmit.focus(); // 满 6 位 → 焦点到确认按钮
+    }
+    syncSubmitState();
+  });
+  // 退格:删空当前格后回上一格
+  input.addEventListener('keydown', e => {
+    if(e.key === 'Backspace' && !input.value && i > 0){
+      e.preventDefault();
+      focusDigit(i - 1);
+    }
+    if(e.key === 'Enter') submitPass();
+  });
+  // 手机端软键盘:输入完成后收起键盘
+  input.addEventListener('blur', () => {
+    if(getPass().length === 6 && input.value) lockSubmit.focus();
+  });
+});
+// 粘贴整段密码(桌面端方便)
+lockScreen.addEventListener('paste', e => {
+  const text = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+  if(text.length){
+    e.preventDefault();
+    lockDigits.forEach((d, i) => { d.value = text[i] || ''; });
+    syncSubmitState();
+    if(getPass().length === 6) submitPass();
+  }
+});
 
 function lockFail(){
   lockErr.classList.add('show');
   lockBox.classList.remove('shake');
   void lockBox.offsetWidth; // 重启动画
   lockBox.classList.add('shake');
-  lockInput.value = '';
-  lockInput.focus();
+  clearDigits();
 }
 function lockSuccess(){
   lockScreen.classList.add('unlocked');
   startStory();
 }
-
-// 回车提交 / 输入满6位自动提交
-lockInput.addEventListener('input', () => {
-  if(lockInput.value.length === 6) lockInput.blur();
-});
-lockInput.addEventListener('keydown', e => {
-  if(lockScreen.classList.contains('unlocked')) return; // 已解锁不再校验
-  if(e.key === 'Enter') submitPass();
-});
-document.getElementById('lockWrap').addEventListener('click', () => lockInput.focus());
 function submitPass(){
-  if(lockInput.value === LOCK_PASS){
+  if(lockScreen.classList.contains('unlocked')) return;
+  if(getPass() === LOCK_PASS){
     lockErr.classList.remove('show');
     lockSuccess();
   }else{
     lockFail();
   }
 }
-document.addEventListener('keydown', e => {
-  if(e.key === 'Enter' && !lockScreen.classList.contains('unlocked')) submitPass();
-});
+lockSubmit.addEventListener('click', submitPass);
 
 /* ============================================================
    启动

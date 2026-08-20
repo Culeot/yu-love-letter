@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1A1A1A">
+<title>未寄出的信 · 给玉</title>
+<style>
+/* ============================================================
+   未寄出的信 · 给玉
+   瑞士极简 × 酒红黑金 · 深情悲伤 · 纯代码零依赖
+   设计蓝图 v1 (2026-08-21, DeepSeek V4 bridge)
+   桌面端: 细线延伸/色块扩展/金线脉冲/光晕 (240FPS 拉满)
+   手机端: 全部降级为 transform/opacity 淡入 ≤0.3s (30FPS 微信)
+   ============================================================ */
+
+:root{
+  /* 酒红 + 黑金 深色体系 (客户覆盖瑞士极简默认白底) */
+  --bg:#1A1A1A;
+  --bg-2:#141414;
+  --wine:#6E0D25;
+  --wine-2:#8C1F3C;
+  --gold:#C9A96E;
+  --gold-dim:#B08D57;
+  --ink:#F5F0E6;
+  --ink-dim:rgba(245,240,230,.55);
+  --ink-faint:rgba(245,240,230,.28);
+  --hand:#D9C7A7;            /* 手写体颜色 */
+  --line:rgba(201,169,110,.22);
+  --line-faint:rgba(201,169,110,.10);
+  --grid:rgba(201,169,110,.05);
+  --grid-wine:rgba(110,13,37,.15);
+
+  /* 字体:系统栈,零外部依赖,微信内核兼容 */
+  --font-hand:'KaiTi','STKaiti','楷体','华文楷体','Kaiti SC','SimSun',serif;
+  --font-body:-apple-system,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Heiti SC',sans-serif;
+  --font-en:'Helvetica Neue','Inter','Arial',sans-serif;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;
+  /* 瑞士网格:酒红横线 + 金色竖线,极淡 */
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-wine) 1px, transparent 1px),
+    radial-gradient(ellipse 90% 70% at 50% 110%, rgba(110,13,37,.28), transparent 70%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  background-size:96px 96px, 96px 96px, 100% 100%, 100% 100%;
+  background-attachment:fixed;
+}
+
+/* ============ 场景容器 ============ */
+.scene{
+  position:fixed;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;visibility:hidden;
+  transition:opacity .45s ease, visibility 0s linear .45s;
+  will-change:opacity,transform;
+  padding:8vh 6vw 14vh;
+}
+.scene.active{opacity:1;visibility:visible;transition:opacity .45s ease;z-index:2;}
+/* 手机端:动效一律降级为纯淡入(时长≤0.3s) */
+@media (max-width:620px){
+  .scene{transition:opacity .3s ease, visibility 0s linear .3s;}
+  .scene.active{transition:opacity .3s ease;}
+}
+
+.scene-inner{width:100%;max-width:1080px;position:relative;}
+
+/* 页码(瑞士式,极简数字) */
+.pagenum{
+  position:fixed;top:26px;right:30px;
+  font-family:var(--font-en);
+  font-size:.68rem;letter-spacing:.35em;
+  color:var(--ink-faint);
+  z-index:20;
+  user-select:none;
+}
+
+/* ============ 桌面端动效原语(手机端关闭) ============ */
+@media (min-width:621px){
+  @keyframes rise{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  @keyframes lineGrow{from{transform:scaleX(0);opacity:0;}to{transform:scaleX(1);opacity:1;}}
+  @keyframes blockExtend{from{transform:scale(.4);opacity:0;}to{transform:scale(1);opacity:1;}}
+  @keyframes goldPulse{0%{opacity:.15;transform:scale(.97);}50%{opacity:.55;}100%{opacity:.15;transform:scale(1.03);}}
+  @keyframes halo{0%{opacity:0;}30%{opacity:.5;}70%{opacity:.5;}100%{opacity:0;}}
+  .scene.active .a-rise{animation:rise .9s cubic-bezier(.22,.61,.36,1) both;}
+  .scene.active .a-rise-2{animation:rise .9s .18s cubic-bezier(.22,.61,.36,1) both;}
+  .scene.active .a-rise-3{animation:rise .9s .36s cubic-bezier(.22,.61,.36,1) both;}
+  .scene.active .a-fade{animation:fade 1.1s ease .25s both;}
+  .scene.active .a-line{animation:lineGrow 1.3s ease .3s both;transform-origin:left center;}
+  .scene.active .a-block{animation:blockExtend 1.4s cubic-bezier(.22,.61,.36,1) .2s both;}
+  .scene.active .a-pulse{animation:goldPulse 3.2s ease-in-out .8s infinite;}
+  .scene.active .a-halo{animation:halo 3.4s ease-in-out .5s infinite;}
+}
+
+/* ============ 封面 ============ */
+.cover-cn{text-align:center;}
+.cover-title{
+  font-family:var(--font-hand);
+  font-size:clamp(2.6rem,7.5vw,5rem);
+  font-weight:400;letter-spacing:.28em;
+  color:var(--ink);
+  text-shadow:0 0 40px rgba(201,169,110,.18);
+}
+.cover-sub{
+  margin-top:2.2rem;
+  font-family:var(--font-hand);
+  font-size:clamp(1.1rem,2.6vw,1.5rem);
+  letter-spacing:.6em;text-indent:.6em;
+  color:var(--hand);opacity:.85;
+}
+/* 信封线框 SVG 装饰 */
+.envelope{
+  margin:3.2rem auto 0;
+  width:min(58%,220px);aspect-ratio:1.6;
+  opacity:.5;
+}
+.cover-hint{
+  position:fixed;bottom:34px;left:50%;transform:translateX(-50%);
+  font-size:.75rem;letter-spacing:.4em;text-indent:.4em;
+  color:var(--ink-faint);
+  animation:hintFloat 2.6s ease-in-out infinite;
+  user-select:none;z-index:20;
+}
+@keyframes hintFloat{0%,100%{opacity:.3;}50%{opacity:.85;}}
+
+/* ============ 正文屏通用 ============ */
+.s-words{font-family:var(--font-hand);font-weight:400;color:var(--ink);}
+.big{
+  font-size:clamp(1.7rem,4.6vw,3rem);
+  line-height:1.9;letter-spacing:.12em;
+}
+.mid{
+  font-size:clamp(1.15rem,2.9vw,1.65rem);
+  line-height:2.1;letter-spacing:.1em;
+}
+.small{
+  font-size:clamp(.9rem,2vw,1.1rem);
+  line-height:2;letter-spacing:.18em;
+  color:var(--ink-dim);
+}
+/* 排版变体:左对齐大 / 右对齐小 / 中心留白 / 纵向 */
+.al-left{text-align:left;}
+.al-right{text-align:right;}
+.al-center{text-align:center;}
+.tight{max-width:620px;}
+.wide{max-width:860px;}
+
+/* 细线分隔(桌面延伸动画) */
+.rule{
+  width:64px;height:1px;background:var(--line);
+  margin:2.6rem 0;
+}
+.rule.center{margin:2.6rem auto;}
+
+/* 酒红色块(犹豫屏) */
+.block-wine{
+  position:absolute;
+  width:120px;height:120px;
+  background:linear-gradient(135deg,var(--wine),var(--wine-2));
+  border-radius:2px;
+  opacity:.5;filter:blur(1px);
+  pointer-events:none;
+}
+
+/* 金线脉冲(决心屏) */
+.gold-ring{
+  position:absolute;top:50%;left:50%;
+  width:min(46vw,340px);aspect-ratio:1;
+  transform:translate(-50%,-50%);
+  border:1px solid var(--gold);
+  border-radius:50%;
+  opacity:.15;
+  pointer-events:none;
+}
+
+/* ============ 告白屏(第8屏,超大手写体) ============ */
+.confess{
+  font-family:var(--font-hand);
+  font-size:clamp(2.8rem,9vw,6.5rem);
+  font-weight:400;letter-spacing:.18em;text-indent:.18em;
+  color:var(--ink);
+  text-shadow:0 0 60px rgba(201,169,110,.35), 0 0 120px rgba(140,31,60,.35);
+}
+.confess-sub{
+  margin-top:2.4rem;
+  font-family:var(--font-hand);
+  font-size:clamp(.95rem,2.2vw,1.25rem);
+  letter-spacing:.45em;text-indent:.45em;
+  color:var(--hand);opacity:.75;
+}
+
+/* ============ 打字机光标 ============ */
+.type-caret::after{
+  content:'';
+  display:inline-block;width:1px;height:1.1em;
+  background:var(--gold);
+  vertical-align:-0.15em;margin-left:4px;
+  animation:caret 1s steps(1) infinite;
+}
+@keyframes caret{50%{opacity:0;}}
+
+/* ============ Next 按钮 ============ */
+.next-btn{
+  position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+  padding:12px 34px;
+  background:rgba(26,26,26,.5);
+  border:1px solid var(--line);
+  color:var(--gold);
+  font-family:var(--font-en);
+  font-size:.75rem;letter-spacing:.4em;text-indent:.4em;
+  cursor:pointer;z-index:100;
+  border-radius:40px;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  transition:all .3s ease;
+  min-height:44px;min-width:44px; /* 触控目标 ≥44px */
+}
+.next-btn:hover{background:var(--wine);border-color:var(--wine-2);color:var(--ink);}
+.next-btn.hidden{opacity:0;pointer-events:none;}
+.next-btn::after{content:' ❦';letter-spacing:0;}
+
+/* ============ 音乐开关(极简音符) ============ */
+.music-btn{
+  position:fixed;bottom:26px;right:22px;
+  width:46px;height:46px;
+  border:1px solid var(--line);
+  border-radius:50%;
+  background:rgba(26,26,26,.4);
+  color:var(--gold);
+  font-size:1.05rem;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;z-index:100;
+  transition:all .3s ease;
+}
+.music-btn.playing{border-color:var(--gold);box-shadow:0 0 14px rgba(201,169,110,.3);}
+.music-btn.playing::after{
+  content:'';position:absolute;inset:-7px;
+  border:1px solid rgba(201,169,110,.35);border-radius:50%;
+  animation:halo 2.4s ease-in-out infinite;
+}
+.music-btn.paused{opacity:.55;}
+
+/* 音频波纹提示(微信自动播放受限时的提示) */
+.wave-hint{
+  position:fixed;bottom:30px;right:82px;
+  font-size:.68rem;letter-spacing:.2em;
+  color:var(--ink-faint);
+  opacity:0;transition:opacity .6s;z-index:100;
+}
+.wave-hint.show{opacity:1;}
+
+/* ============ 结尾屏 ============ */
+.ending{
+  font-family:var(--font-hand);
+  font-size:clamp(1.05rem,2.6vw,1.5rem);
+  letter-spacing:.35em;text-indent:.35em;
+  color:var(--ink-faint);
+}
+
+/* ============ 手机端窄屏微调 ============ */
+@media (max-width:620px){
+  .scene{padding:10vh 9vw 16vh;}
+  .pagenum{top:20px;right:20px;font-size:.6rem;}
+  .block-wine{width:80px;height:80px;}
+  .envelope{width:46%;}
+}
+
+/* ============================================================
+   密码门(锁定层)——未解锁时页面仅显示密码输入
+   ============================================================ */
+.lock-screen{
+  position:fixed;inset:0;z-index:9999;
+  display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 110%, rgba(110,13,37,.30), transparent 70%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  transition:opacity .8s ease, visibility 0s linear .8s;
+}
+.lock-screen.unlocked{
+  opacity:0;visibility:hidden;
+  transition:opacity .8s ease, visibility 0s linear .8s;
+  pointer-events:none;
+}
+.lock-box{text-align:center;width:min(82%,360px);}
+.lock-title{
+  font-family:var(--font-hand);
+  font-size:clamp(1.5rem,4vw,2.2rem);
+  letter-spacing:.4em;text-indent:.4em;
+  color:var(--ink);
+  opacity:.9;
+  margin-bottom:2.6rem;
+}
+.lock-input-wrap{
+  position:relative;
+  display:flex;align-items:center;justify-content:center;
+  gap:10px;
+}
+.lock-digit{
+  width:clamp(34px,9vw,46px);height:clamp(48px,12vw,60px);
+  background:transparent;
+  border:none;border-bottom:2px solid var(--line);
+  color:var(--gold);
+  font-family:var(--font-en);
+  font-size:clamp(1.4rem,4vw,1.9rem);
+  text-align:center;
+  outline:none;
+  transition:border-color .3s;
+  caret-color:var(--gold);
+}
+.lock-digit:focus{border-color:var(--gold);}
+.lock-digit::-webkit-outer-spin-button,
+.lock-digit::-webkit-inner-spin-button{-webkit-appearance:none;}
+.lock-digit[type=number]{-moz-appearance:textfield;appearance:textfield;}
+.lock-err{
+  margin-top:1.6rem;
+  font-family:var(--font-hand);
+  font-size:.95rem;letter-spacing:.3em;
+  color:#B85C5C;
+  opacity:0;transform:translateY(-4px);
+  transition:opacity .3s, transform .3s;
+  min-height:1.4em;
+}
+.lock-err.show{opacity:1;transform:translateY(0);}
+.lock-hint{
+  margin-top:2.2rem;
+  font-size:.7rem;letter-spacing:.25em;
+  color:var(--ink-faint);
+  opacity:.6;
+}
+@keyframes shake{
+  0%,100%{transform:translateX(0);}
+  20%{transform:translateX(-8px);}
+  40%{transform:translateX(8px);}
+  60%{transform:translateX(-5px);}
+  80%{transform:translateX(5px);}
+}
+.lock-box.shake{animation:shake .45s ease;}
+</style>
+</head>
+<body>
+
+<!-- ==================== 密码门(锁定层) ==================== -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-box" id="lockBox">
+    <div class="lock-title">请输入密码</div>
+    <div class="lock-input-wrap" id="lockWrap">
+      <input class="lock-digit" type="password" inputmode="numeric" maxlength="6" autocomplete="off" aria-label="密码" id="lockInput" autofocus>
+    </div>
+    <div class="lock-err" id="lockErr">密码错误</div>
+    <div class="lock-hint">— 只给一个人看的信 —</div>
+  </div>
+</div>
+
+<!-- ==================== 11 屏 ==================== -->
+
+<!-- 1 封面 -->
+<section class="scene" data-idx="0">
+  <div class="scene-inner cover-cn">
+    <div class="cover-title a-rise">未寄出的信</div>
+    <div class="cover-sub a-rise-2">给&nbsp;&nbsp;玉</div>
+    <svg class="envelope a-fade" viewBox="0 0 160 100" fill="none" aria-hidden="true">
+      <rect x="8" y="14" width="144" height="72" stroke="#C9A96E" stroke-opacity=".55" stroke-width="1"/>
+      <path d="M8 22 L80 60 L152 22" stroke="#C9A96E" stroke-opacity=".4" stroke-width="1"/>
+      <circle cx="80" cy="50" r="10" stroke="#8C1F3C" stroke-opacity=".8" stroke-width="1"/>
+      <path d="M80 44 L80 56 M74 50 L86 50" stroke="#8C1F3C" stroke-opacity=".8" stroke-width="1"/>
+      <text x="80" y="86" text-anchor="middle" fill="#C9A96E" fill-opacity=".4" font-size="6" letter-spacing="3">2026 · 秋</text>
+    </svg>
+  </div>
+  <div class="cover-hint">轻触翻开</div>
+</section>
+
+<!-- 2 引子(打字机) -->
+<section class="scene" data-idx="1">
+  <div class="scene-inner al-left tight">
+    <div class="rule a-line"></div>
+    <p class="s-words big" data-type="text">
+      有些话，我练习了很多遍。
+      可每次见到你，都变成一句「没事」。
+    </p>
+    <div class="rule a-line" style="margin-top:2.8rem;margin-left:auto;"></div>
+  </div>
+</section>
+
+<!-- 3 初见 -->
+<section class="scene" data-idx="2">
+  <div class="scene-inner wide">
+    <p class="s-words big al-left a-rise" style="max-width:640px;">
+      第一次注意到你，是在一个很普通的下午。
+    </p>
+    <div class="rule a-line" style="margin-left:12%;"></div>
+    <p class="s-words mid al-right a-rise-2" style="max-width:480px;margin-left:auto;color:var(--hand);">
+      普通到，我后来才明白，
+      <br>那天一点也不普通。
+    </p>
+  </div>
+</section>
+
+<!-- 4 日常 -->
+<section class="scene" data-idx="3">
+  <div class="scene-inner al-right tight">
+    <p class="s-words mid a-rise" style="max-width:520px;margin-left:auto;">
+      我开始记得你喜欢的季节，
+      <br>你说话时的小动作，
+      <br>你提起未来时的语气。
+    </p>
+    <div class="rule a-line" style="margin:2.8rem 0 0 auto;"></div>
+    <p class="small a-rise-3">都是些很小的事。可我一件都没忘。</p>
+  </div>
+</section>
+
+<!-- 5 犹豫(酒红色块) -->
+<section class="scene" data-idx="4">
+  <div class="scene-inner al-center">
+    <div class="block-wine a-block" style="top:-14vh;left:12%;"></div>
+    <p class="s-words mid a-rise" style="max-width:560px;margin:0 auto;">
+      我也想过，不说是不是更安全。
+    </p>
+    <div class="rule center a-line"></div>
+    <p class="s-words mid a-rise-2" style="max-width:560px;margin:0 auto;color:var(--hand);">
+      可后来发现，遗憾比害怕更难受。
+    </p>
+    <div class="block-wine a-block" style="bottom:-12vh;right:10%;"></div>
+  </div>
+</section>
+
+<!-- 6 错过(纵向空间) -->
+<section class="scene" data-idx="5">
+  <div class="scene-inner al-left" style="display:flex;flex-direction:column;gap:2.2rem;">
+    <p class="small a-rise" style="opacity:.5;">有些距离，是我自己留的。</p>
+    <p class="s-words mid a-rise-2" style="padding-left:8%;">
+      我们之间，隔着很多次欲言又止，
+      <br>和很多个「算了吧」。
+    </p>
+    <p class="small a-rise-3 al-right" style="opacity:.4;">每一次，我都以为会有下一次。</p>
+  </div>
+</section>
+
+<!-- 7 决心(金线脉冲) -->
+<section class="scene" data-idx="6">
+  <div class="scene-inner al-center">
+    <div class="gold-ring a-pulse"></div>
+    <p class="s-words mid a-rise" style="max-width:600px;margin:0 auto;">
+      所以这一次，
+      <br>我不练习告别了。
+    </p>
+    <div class="rule center a-line"></div>
+    <p class="s-words big a-rise-2" style="color:var(--gold);letter-spacing:.18em;">
+      我想练习，把喜欢说出来。
+    </p>
+  </div>
+</section>
+
+<!-- 8 告白(打字机,超大手写体) -->
+<section class="scene" data-idx="7">
+  <div class="scene-inner al-center">
+    <p class="confess" data-type="text">我好喜欢你。</p>
+    <p class="confess-sub a-fade">不是突然的。是攒了很久的。</p>
+  </div>
+</section>
+
+<!-- 9 释然 -->
+<section class="scene" data-idx="8">
+  <div class="scene-inner al-left" style="max-width:700px;">
+    <p class="small a-rise" style="letter-spacing:.5em;">你不用回答。</p>
+    <p class="s-words mid a-rise-2" style="margin-top:2.6rem;color:var(--hand);">
+      我只是想让你知道，
+      <br>有一个人，很认真地喜欢过你。
+    </p>
+    <div class="rule a-line" style="margin-top:2.8rem;"></div>
+  </div>
+</section>
+
+<!-- 10 署名 -->
+<section class="scene" data-idx="9">
+  <div class="scene-inner al-right">
+    <p class="s-words big a-rise" style="color:var(--hand);letter-spacing:.3em;">毅</p>
+    <p class="small a-rise-2" style="letter-spacing:.5em;margin-top:1.4rem;">给&nbsp;玉</p>
+    <p class="small a-rise-3" style="opacity:.35;margin-top:3rem;letter-spacing:.3em;">2026.8.21</p>
+  </div>
+</section>
+
+<!-- 11 结尾 -->
+<section class="scene" data-idx="10">
+  <div class="scene-inner al-center">
+    <p class="ending">只是看完，就好。</p>
+  </div>
+</section>
+
+<!-- ============ UI ============ -->
+<div class="pagenum" id="pagenum">01 / 11</div>
+<button class="next-btn hidden" id="nextBtn">Next</button>
+<button class="music-btn paused" id="musicBtn" aria-label="背景音乐">♪</button>
+<div class="wave-hint" id="waveHint">轻触开启音乐</div>
+
+<audio id="bgm" loop preload="auto" src="assets/music.mp3"></audio>
+
+<script>
+/* ============================================================
+   config(可改这里,用户只改配置不动代码)
+   ============================================================ */
+const CONFIG = {
+  partnerName: '玉',
+  yourName: '毅',
+  totalScenes: 11,
+  music: 'assets/music.mp3',
+  typeSpeed: 100,        // 打字机每字 ms
+  typePause: 800,        // 句末停顿 ms
+  autoPlayMusic: false,  // 浏览器自动播放受限,留 false
+  mobileDegrade: true    // 手机端动效降级
+};
+
+/* ============================================================
+   场景切换
+   ============================================================ */
+const scenes = document.querySelectorAll('.scene');
+const nextBtn = document.getElementById('nextBtn');
+const pagenum = document.getElementById('pagenum');
+let cur = 0;
+
+function showScene(idx){
+  if(idx < 0 || idx >= scenes.length) return;
+  scenes[cur].classList.remove('active');
+  cur = idx;
+  scenes[cur].classList.add('active');
+  pagenum.textContent = String(cur+1).padStart(2,'0') + ' / ' + String(scenes.length).padStart(2,'0');
+  // 封面(0)与末页(10)隐藏 Next
+  nextBtn.classList.toggle('hidden', cur === 0 || cur === scenes.length-1);
+  runTypewriter(cur);
+}
+
+nextBtn.addEventListener('click', () => showScene(cur+1));
+
+// 封面轻触翻开
+document.querySelector('.scene[data-idx="0"]').addEventListener('click', () => {
+  if(cur === 0) showScene(1);
+});
+
+// 键盘方向键(桌面,仅解锁后生效)
+document.addEventListener('keydown', e => {
+  if(!storyStarted) return;                 // 未解锁不响应
+  if(e.target && e.target.tagName === 'INPUT') return; // 输入框聚焦时不翻页
+  if(e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') showScene(cur+1);
+  if(e.key === 'ArrowLeft') showScene(cur-1);
+});
+
+// 首次交互尝试播放音乐(微信自动播放受限的通行做法)
+let musicStarted = false;
+function tryStartMusic(){
+  if(musicStarted || CONFIG.autoPlayMusic) return;
+  musicStarted = true;
+  const bgm = document.getElementById('bgm');
+  bgm.volume = 0;
+  bgm.play().then(() => {
+    bgm.volume = 0.55; // 起:0→0.55 淡入
+    fadeVolume(bgm, 0.55);
+    setMusicUI(true);
+    document.getElementById('waveHint').classList.remove('show');
+  }).catch(() => {
+    // 播放失败:提示用户轻触开启
+    document.getElementById('waveHint').classList.add('show');
+  });
+}
+document.addEventListener('pointerdown', tryStartMusic, { once:true });
+document.addEventListener('scroll', tryStartMusic, { once:true });
+
+function fadeVolume(audio, target, dur=2500, from){
+  const start = from ?? audio.volume;
+  const t0 = performance.now();
+  function step(now){
+    const p = Math.min((now-t0)/dur, 1);
+    audio.volume = start + (target-start) * (p*p*(3-2*p));
+    if(p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* 音乐开关 */
+const musicBtn = document.getElementById('musicBtn');
+let playing = false;
+function setMusicUI(on){
+  playing = on;
+  musicBtn.classList.toggle('playing', on);
+  musicBtn.classList.toggle('paused', !on);
+  musicBtn.textContent = on ? '♪' : '♪';
+}
+musicBtn.addEventListener('click', () => {
+  const bgm = document.getElementById('bgm');
+  if(playing){
+    bgm.pause();
+    setMusicUI(false);
+  }else{
+    bgm.volume = 0.45;
+    bgm.play().then(() => setMusicUI(true))
+       .catch(() => document.getElementById('waveHint').classList.add('show'));
+  }
+});
+
+/* ============================================================
+   打字机效果(第2/8/10屏 = idx 1/7/9)
+   手机端(≤620px 或触屏)降级:直接整句淡入
+   ============================================================ */
+const TYPE_IDX = new Set([1,7,9]);
+const typeEls = document.querySelectorAll('[data-type]');
+const isMobile = window.matchMedia('(max-width:620px)').matches ||
+                 ('ontouchstart' in window && window.innerWidth < 900);
+
+function runTypewriter(idx){
+  if(!TYPE_IDX.has(idx)) return;
+  typeEls.forEach(el => {
+    const full = el.textContent.trim().replace(/\s+/g,' ');
+    el.classList.remove('type-caret');
+    el.textContent = '';
+    if(isMobile){
+      // 手机降级:整句淡入
+      el.textContent = full;
+      el.style.transition = 'opacity .5s ease';
+      el.style.opacity = '0';
+      requestAnimationFrame(() => requestAnimationFrame(() => { el.style.opacity = '1'; }));
+      return;
+    }
+    el.classList.add('type-caret');
+    let i = 0;
+    (function tick(){
+      if(i <= full.length){
+        el.textContent = full.slice(0, i);
+        i++;
+        setTimeout(tick, CONFIG.typeSpeed);
+      }
+    })();
+  });
+}
+
+/* ============================================================
+   密码门(锁定层)——密码 140522
+   ============================================================ */
+const LOCK_PASS = '140522';
+const lockScreen = document.getElementById('lockScreen');
+const lockBox = document.getElementById('lockBox');
+const lockInput = document.getElementById('lockInput');
+const lockErr = document.getElementById('lockErr');
+
+function lockFail(){
+  lockErr.classList.add('show');
+  lockBox.classList.remove('shake');
+  void lockBox.offsetWidth; // 重启动画
+  lockBox.classList.add('shake');
+  lockInput.value = '';
+  lockInput.focus();
+}
+function lockSuccess(){
+  lockScreen.classList.add('unlocked');
+  startStory();
+}
+
+// 回车提交 / 输入满6位自动提交
+lockInput.addEventListener('input', () => {
+  if(lockInput.value.length === 6) lockInput.blur();
+});
+lockInput.addEventListener('keydown', e => {
+  if(lockScreen.classList.contains('unlocked')) return; // 已解锁不再校验
+  if(e.key === 'Enter') submitPass();
+});
+document.getElementById('lockWrap').addEventListener('click', () => lockInput.focus());
+function submitPass(){
+  if(lockInput.value === LOCK_PASS){
+    lockErr.classList.remove('show');
+    lockSuccess();
+  }else{
+    lockFail();
+  }
+}
+document.addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !lockScreen.classList.contains('unlocked')) submitPass();
+});
+
+/* ============================================================
+   启动
+   ============================================================ */
+let storyStarted = false;
+function startStory(){
+  if(storyStarted) return;
+  storyStarted = true;
+  showScene(0);
+}
+// 锁定层默认盖住全部内容;解锁后才启动场景
+</script>
+</body>
+</html>
